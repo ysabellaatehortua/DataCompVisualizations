@@ -1,0 +1,221 @@
+---
+title: "Does Rolling Stone Accurately Represent People's Music Taste?"
+author: "Ysabella Atehortua and Ryan Kim"
+output: 
+  html_document:
+    css: ../lab.css
+    highlight: pygments
+    theme: cosmo
+    toc: true
+    toc_float: true    
+    fig_height: 4
+    fig_width: 5
+  pdf_document:
+    fig_height: 4
+    fig_width: 5
+  word_document:
+    fig_height: 4
+    fig_width: 5
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(mosaic) 
+
+knitr::opts_chunk$set(
+  tidy=FALSE,       
+  size="small",
+  echo=FALSE,
+  warning = FALSE,
+  message = FALSE) 
+```
+
+
+```{r, include=FALSE}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(formattable)
+library(tm)
+
+setwd("~/stat209")
+spotify_data <- read.file("project2-group7/SpotifyTop200.csv")
+rs_data <- read.file("project2-group7/rollingstone.csv")
+
+```
+
+## Introduction
+
+In Project 1, we analyzed the data set “Top Spotify Tracks of 2018” that looks at songs, artists, genres, and specific traits from Kaggle. We wanted to explore the music world and find out what makes an artist or song popular. Our analysis on this data set had us questioning what makes a song objectively good? With our data on what makes a song popular, we chose to supplement this with data from Rolling Stone -- an American monthly magazine that focuses on music, politics, and popular culture. As an authority on being able to distinguish "good" music -- we analyze their list of the "500 Best Songs of All Time." Along with more Spotify data (namely, "Spotify Weekly Global Top 200 songs" from Kaggle) and information provided from the Rolling Stone data set -- we set out to find what makes a song good.
+
+## Top Songs
+
+The graph below showcases what songs are on both Spotify's Weekly Global Top 200 list and on the list of the 500 Best Songs of All Time. We found that of the 3512 unique songs we pulled from our Spotify data, only 22 made it on the Rolling Stone's Top 500 List. Of the songs that were on both lists, we accessed the streaming data to see how they compared to the streaming data of songs that did not make it on the Rolling Stone list. We found that though songs on the Rolling Stone list have millions of streams -- most do not meet the mean stream count for top songs on Spotify. This could be for a few reasons, either Rolling Stone writers and fans don't use Spotify -- or streams are not dictated by the quality of the song. We believe the latter is true.
+
+
+```{r}
+spotify_data <- spotify_data %>%
+  dplyr::rename(Title = Track) %>%
+  group_by(Title)
+```
+
+
+```{r, include=FALSE}
+
+spotify_data <- distinct(spotify_data, "id", .keep_all= TRUE)
+
+joined_via_inner <-  rs_data %>% 
+  right_join(spotify_data, by = "Title")
+
+joined_via_inner$Artist.x <- ifelse(is.na(joined_via_inner$Artist.x), joined_via_inner$Artist.y, joined_via_inner$Artist.x)
+
+sum(is.na(joined_via_inner$X))
+
+function1 <- function(data, desiredCols) {
+  completeVec <- complete.cases(data[, desiredCols])
+  return(data[completeVec, ])
+}
+
+rs_picks <- function1(joined_via_inner, "X") %>% arrange(Streams)
+```
+
+```{r}
+rs_no_outliers <- rs_picks %>%
+  dplyr::mutate(id = row_number()) %>%
+  filter(Streams < 31182644)
+
+spotify_data2 <- spotify_data %>%
+  summarise(mean = mean(Streams))
+
+txt <- paste("The mean number of",
+              "streams per top song on", "Spotify",
+              sep = "\n")
+
+rs_plot <- ggplot() +
+  geom_bar(data = rs_no_outliers, aes(x = reorder(Title, -Streams/1000000), y = Streams/1000000), stat = "identity", fill = "#4fd1a6", width = 0.6) +
+  labs(title = "Stream Count for Rolling Stones Favorites", x = "Song Title", y = "Streams (in millions)") +
+  theme_light() +    
+  scale_y_continuous(limits=c(0, 11)) +
+  coord_flip() +
+  geom_hline(yintercept = 8310980/1000000, 
+             color = "blue", 
+             size=1) + 
+  ggplot2::annotate(
+    geom = "curve", x = 14, y = 6, xend = 10, yend = 8, 
+    curvature = .4, arrow = arrow(length = unit(2, "mm")),
+                    color = "36b395"
+  ) + ggplot2::annotate("text", 
+                    16, 6, 
+                    label=txt,
+                    color = "36b395")
+
+rs_plot
+```
+
+## Density Plot for Song Characteristics
+
+The graph below attempts to correlate aspects of Rolling Stone's picks, with the lighter colors representing a negative correlation to how loud a song is and the lighter colors representing a smaller correlation. It seems that energy and loudness have a fairly positive correlation to one another -- which intuitively makes sense as, the louder the song the more likely it is to inspire spirit within the listener. Interestingly though, popularity does not seem to have a strong positive correlation with any of the other variables, dispelling the idea that there is a "recipe" one can follow to ensure a song becomes popular. When it comes to popularity's correlations with instrumentalness and tempo, a negative correlation can be seen. Thus, these variables are not preferable popular songs.
+
+```{r, include=FALSE}
+install.packages("corrplot")
+```
+
+
+```{r}
+library(corrplot)
+
+rs_corr <- rs_picks %>%
+  select(Popularity:tempo)
+
+M <- mosaic::cor(rs_corr)
+corrplot(M, method = "ellipse", type="upper", tl.srt = 45)
+
+```
+```{r, include=FALSE}
+library(data.table) 
+```
+
+## Release Year for Rolling Stones Favorites
+
+The major differences between Spotify and Rolling Stone is clearly their target audience. As we showed in the first graph, Spotify streamers are not in agreement with what Rolling Stone deems a "good" song. The dataset itself includes Spotify's "Weekly Global Hits," which presumably consist of a majority of new releases as opposed to old classics. As a pop-culture magazine, we were interested in what the distribution of release years for the Top 500 Rolling Stone Songs. As hypothesized, a large majority of the songs were released before 1980, showcasing that Rolling Stone may prefer classic song writing to new-experimental music.
+
+Note: The colors of the graph correspond to the respective "Popularity Score" of a song with the purple colors being more popular, and the blue-green-orange colors to be less popular.
+
+This also aligns with our thesis as, Rolling Stone more often than not chooses "unpopular" songs for their list.
+
+```{r}
+count_table <-table(rs_data$Year, rs_data$Popularity)
+
+count_table<-as.data.frame(count_table)
+count_table<-rename(count_table, c("Year"="Var1", "Popularity"="Var2"))
+
+count_table$Year <- as.numeric(as.character(count_table$Year))
+
+change_to_four <- function(two_digit, rs_data_wide) 
+{
+  ifelse(two_digit < 10, two_digit + 2000, two_digit + 1900)
+}
+
+count_table[1] <- lapply(count_table[1], change_to_four)
+
+count_table <- count_table %>%
+  group_by(gr=cut(as.numeric(Popularity), breaks= seq(3, 86, by = 1)) ) %>%
+  mutate(gr = as.character(gr))
+
+ggplot(count_table, aes(x=count_table$Year, y=count_table$Freq, fill=count_table$gr)) + 
+    geom_area() +
+  labs(title = "How Release Date Relates to Popularity", x = "Year", y = "# of Songs on the Top Charts") + 
+  theme(legend.position = "none")
+
+```
+
+## Most Streamed Genre
+
+To confirm our thesis, we looked to the Spotify data to examine what genres were being streamed the most. Sure enough, of the 9 top genres, 4 of the genres are some kind of "pop" and 3 are "electronic" (brostep, big room, and edm). As electronic music was popularized in the 2000s and the majority of Rolling Stone picks were released before 1980 -- it is clear that Spotify listeners and Rolling Stone fans do not come to a consensus on what makes a song good.
+
+Note: Each point on the graph corresponds to a single song.
+
+```{r, include=FALSE}
+setwd("~/stat209")
+spotify_genres <- read.file("project2-group7/top10s.csv")
+spotify_genre_data <- data.frame(spotify_genres)
+```
+```{r, include=FALSE}
+genre_data <- spotify_genre_data %>%
+  dplyr::rename(Title = title) %>%
+  left_join(spotify_data, by = "Title") %>%
+  function1("Streams") %>%
+  group_by(top.genre)
+
+```
+
+```{r}
+genre_plot <- genre_data %>%
+  ggplot(aes(x = reorder(top.genre, -Streams/1000000), y = Streams/1000000, color = top.genre))  +
+  geom_segment(aes(x=top.genre,xend=top.genre, y=0, yend=Streams/1000000)) +
+  geom_point(size=3) +
+  labs(title = "Stream Count for Top Genres", x = "Genre", y = "Streams (in hundred-millions)") +
+  theme_light()+    
+  coord_flip() +
+  xlim('canadian pop','edm', 'dance pop', 'boy band', 'electropop', 'hip hop', 'big room', 'brostep', 'pop') +
+    theme(legend.position = 'none', plot.title = element_text(size=17,hjust = -0.7, face = "bold"), axis.title.y = element_text(face = "bold"))
+
+genre_plot
+```
+
+## Discussion
+
+The goal of this project was to build off of what we had completed in the previous project. By implementing more datasets, we were able to be more creative with our plots. The results from this project were similar to the previous one as we were aiming to find out what makes a song popular. With multiple data sets, we were able to compare and contrast from multiple years. For example, as said above we found that only 22 out of 3512 unique songs we pulled from our Spotify data were in the Rolling Stone’s Top 500 list. However unsatisfying -- the more data we introduced, the more clear it became that the two companies appeal to vastly different demographics, so not much could be said about what makes a song "good" or "popular." Looking at the streaming data seems like the best bet, but because of confounding variables may not show the whole picture. We were able to prove statistically what may be intuitive -- music is not so easily quantified, what is good to one may be awful to another.
+
+With the amount of data we had, it was not possible for us to explore every piece of data at hand. Specifically for figure 4 -- because we were working with categorical variables, we had to specify which genres we wanted to showcase(the top stream counts) by eye. We also had to remove an outlier from the initial joined data set because though the song titles were the same, the artists weren't. Some questions that remain unanswered are what genres does Rolling Stone prefer? As well as, what are the demographics of Spotify users and Rolling Stone readers? We believe this information will allow for some of the gaps to be filled and other hypotheses to be strengthened. 
+
+## Appendix: Methodology
+
+For Figure 1, we chose to display a bar graph, going from left to right, because it was the easiest for the readers to see. Each bar is labeled with the song title and making a bar graph clearly shows the text. The graph is going in descending order to clearly show the differences in streams from song to song. The streams are displayed in an easy manner with the axis label specifically saying the numbers are in the hundred million units, so there is no confusion for the reader. We used vline() as well as geom_text() and geom_curve() to create annotations on the graph that lead the reader to the conclusion we were described. We used inner_join() to join the two datasets by Song Title which allowed us to remove many NA values.
+
+Figure 2 was displayed as a correlation plot to allow us to compare all of the variables at once and easily see which variables had the most significant correlation for further analysis. We chose to pan from blue to read to make detecting the amount of correlation intuitive with stronger connections (both positive and negative) displaying stronger colors.
+
+For Figure 3, we created an area graph because it allowed us to display the number of songs in a given release year as a line graph would, but also allowed up to introduce a 3rd variable, namely the songs popularity score. We had to do quite a bit of wrangling for this one -- adding a variable to count frequency, creating a function to change the data from a 2 to 4 digit year, and grouping and cutting the popularity variable to make the outputted graph more aesthetically smooth.
+
+For Figure 4, we created point and segment graph and to display streams and genre. This was used as opposed to the bar graph for purely aesthetic purposes. The points on the graph allow readers to see that the data can be easily skewed as some genres are on top because of a variety of songs while others only have a few hits. 
+

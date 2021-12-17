@@ -1,0 +1,116 @@
+---
+title: "Traits of the Most Popular Songs in 2018"
+author: "Ysabella Atehortua and Ryan Kim"
+output: 
+  html_document:
+    css: ../lab.css
+    highlight: pygments
+    theme: cosmo
+    toc: true
+    toc_float: true    
+    fig_height: 4
+    fig_width: 5
+  pdf_document:
+    fig_height: 4
+    fig_width: 5
+  word_document:
+    fig_height: 4
+    fig_width: 5
+---
+
+```{r, include=FALSE}
+library(readr)
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(formattable)
+library(wordcloud)
+library(tm)
+
+spotify_data <- read.csv("~/stat209/project1-group7/top2018.csv")
+
+library(tidyverse)
+```
+
+## Introduction
+
+With over 158 million users worldwide, Spotify has become one of the most innovative companies in the music industry. Through their tailoring of playlists "For You," recommending music they know you'll love, and creating charts for pop music worldwide -- Spotify has shown that they have a wealth of analytical data.
+
+Because music is an important part of our daily lives, we wanted to explore the music world and find out what makes an artist or song popular. Using a dataset “Top Spotify Tracks of 2018” that looks at songs, artists, genres, and specific traits from Kaggle, we will look at the specific traits that the top songs on this list share. This data set was curated straight from Spotify's API and has been collated to emphasize variables such as energy, loudness, key, and danceability.
+Analyzing this data set will not only allow us to see what artists dominated in 2018, but can show trends about what genres, keys, and aspects appeal to most listeners.
+
+## Top Artists
+
+The graph below showcases the number of times top artists were featured on Spotify’s Top 100 list in 2018. The most interesting aspect is the clear favorability of rap music during this time, with XXXTentacion, Post Malone, and Drake holding the top 3 spots in the chart. The chart also shows that pop artists (Selena Gomez, Camila Cabello), despite the genre name, are equally as popular as artists in genres such as Rap (Migos) and Alternative (Clean Bandit). It seems that the artists on this list may have less to do with the quality, but their streaming numbers which have many other confounding variables such as popularity with radio stations, the type of fans they appeal to, or viral songs. For example, Clean Bandit appeared on the chart an equal number of times as Kendrick Lamar and Ariana Grande, two artists with far more name recognition, however maybe due to their international appeal or those that were featured on their most popular songs, they are statistically ranked equally.
+
+```{r}
+top_artists <- spotify_data %>%
+    group_by(artists)  %>%
+    summarise(n_apperance = n()) %>%
+    filter(n_apperance > 1) %>% # only show artists who appeared more than once
+    arrange(desc(n_apperance))
+
+#turn to categorical so we can reorder them using factor
+top_artists$artists <- factor(top_artists$artists, levels = top_artists$artists[order(top_artists$n_apperance)]) # put in descending order 
+
+ggplot(top_artists, aes(x = artists, y = n_apperance)) +
+    geom_bar(stat = "identity",  fill = "#4fd1a6", width = 0.6 ) + 
+    labs(title = "Top Artists of 2018", x = "Artists", y = "Number of Apperance on the Top 100") + theme_light() +
+    geom_text(aes(label=n_apperance)) +
+    coord_flip() #flip horizontally to see all the names
+```
+
+## Variable Correlation
+
+The graph below attempts to correlate aspects of the most popular songs, with the lighter colors representing a positive correlation to how loud a song is and the darker colors representing a smaller correlation. It seems that energy and loudness have a fairly positive correlation to one another -- which intuitively makes sense as, the louder the song the more likely it is to inspire spirit within the listener. Energy seems to be positively correlated with danceability which again follows the hypothesis that songs that make people happy tend to be those that have high energy, are loud, and you can dance to.
+
+```{r}
+base_plot <- 
+  spotify_data %>% 
+  ggplot(aes(y = danceability, x = energy)) + geom_point() + 
+  aes(color = loudness) +
+  geom_point() +
+theme_light()
+
+base_plot
+```
+
+
+## Most Popular Key for Top Songs
+
+The graph below shows the most common keys on Spotify’s Top 100 list, sorted by popularity. The graph shows that C#, D♭is the most popular and D#,E♭is the least popular. We can see the distribution of all the keys in the Top 100 and can easily see that songs in the key C♯,D♭ where wildly more popular than others. This key transcended genre as it was used by rap artists such as Drake and alternative artists such as Portugal. The Man. The disparity between this key and the rest lead to the conclusion that this a song in this key would likely be more popular than others.
+
+```{r}
+spotify_data$key <- as.character(spotify_data$key) #change to categorical
+spotify_data$key <- revalue(spotify_data$key, c("0" = "C", "1" = "C♯,D♭", "2" = "D", "3" = "D♯,E♭", "4" = "E", "5" =  "F", "6" = "F♯,G♭","7" = "G","8" = "G♯,A♭","9" = "A","10" = "A♯,B♭","11" = "B")) 
+
+song_keys <- spotify_data %>%
+    group_by(key) %>%
+    summarise(n_key = n()) %>%
+    arrange(desc(n_key))
+
+song_keys$key <- factor(song_keys$key, levels = song_keys$key[order(song_keys$n_key)]) # in order to visualise the keys in descending order
+
+library(RColorBrewer)
+
+ggplot(song_keys, aes(x = reorder(key,-n_key), y = n_key, fill = key)) +
+    geom_bar(stat = "identity") +
+    labs(title = "Popular Keys of Top Songs", x = "Keys", y = "Count of Keys on the Top 100") +
+    theme_bw() +
+    scale_fill_brewer(palette = "Set3")
+```
+
+## Discussion
+
+The main takeaways from our project have to do with what makes a song popular on Spotify. In 2018, the most prevalent traits were those that increased happiness among listeners. Songs that were energetic, danceable, and had a high valence were among the most popular songs during the time frame.
+
+Some questions that remained unanswered are whether this trend continues in more recent years and whether a song's appearance on the Top 100 list correlates with the number of plays the song got. Questions also remain about popularity of the keys present in top songs. Because we cannot discern whether the song is in a major key or not, not much can be said about what makes these keys more popular than others (aside from coincidence).
+
+## Appendix: Methodology
+
+For Figure 1, we chose to display this as a bar graph because it is the most logical way for readers to be able to see the most popular artists. Because each bar is labelled and the graph is in descending order, it clearly shows the disparities and achievements of the top artists. We chose to limit the number of artists presented, showing only those that made it on the list more than once, to make the graphic more digestible and to discern artists as consistantly popular from "one-hit-wonders".
+
+Figure 2 was displayed as a correlation plot to allow us to compare many variables at once and easily see which variables had the most significant correlation for further analysis. We chose to use a scatterplot to see the trend lines that presented themselves and coded a third variable for color to allow us to compare another value.
+
+For figure 3 we again used a bar graph to make it easy for readers to discern which keys were the most popular. We coded with color as well for purely aesthetic purposes and worked to reorder the plot in descending order to make comparisons between keys easier.
+
